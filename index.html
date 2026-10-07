@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Perpustakaan Jurnal</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#faf7f2;--card:#fff;--tx:#2b2620;--mu:#8a8176;--ac:#b4562f;--bd:#e6dfd3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1a17;--card:#27241f;--tx:#f0eadf;--mu:#a39a8c;--ac:#e08a60;--bd:#3a352d}}
+:root[data-theme="dark"]{--bg:#1c1a17;--card:#27241f;--tx:#f0eadf;--mu:#a39a8c;--ac:#e08a60;--bd:#3a352d}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 Georgia,'Times New Roman',serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:1.7rem;margin:.2em 0 .1em}
+.sub{color:var(--mu);margin:0 0 18px;font-family:system-ui,sans-serif;font-size:.9rem}
+input,select,textarea,button{font:inherit;font-family:system-ui,sans-serif;font-size:.95rem;color:var(--tx)}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+button{cursor:pointer;border:1px solid var(--bd);background:var(--card);border-radius:10px;padding:8px 12px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.row>*{flex:1 1 140px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 16px}
+.chip{padding:4px 11px;border-radius:99px;font-size:.82rem;border:1px solid var(--bd);background:var(--card);color:var(--mu)}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;margin:10px 0}
+.card h3{margin:0 0 2px;font-size:1.08rem}
+.d{color:var(--mu);font:.8rem system-ui,sans-serif}
+.n{margin:6px 0;color:var(--tx);font-size:.93rem}
+.tg{color:var(--ac);font:.8rem system-ui,sans-serif}
+.act{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.act a{background:var(--ac);color:#fff;text-decoration:none;padding:7px 14px;border-radius:10px;font:.9rem system-ui,sans-serif}
+.act button{padding:6px 10px;font-size:.82rem;color:var(--mu)}
+details{margin:12px 0}
+summary{cursor:pointer;font-family:system-ui,sans-serif;font-weight:600}
+.otd{border-left:4px solid var(--ac)}
+.empty{text-align:center;color:var(--mu);padding:30px 0}
+#st{font:.8rem system-ui,sans-serif;color:var(--mu);margin-top:20px}
+</style>
+</head>
+<body>
+<main>
+<h1>📓 Perpustakaan Jurnal</h1>
+<p class="sub">Satu tempat untuk semua link Google Docs jurnalmu. Cari berdasarkan judul, tag, tanggal, atau catatan.</p>
+
+<input id="q" type="search" placeholder="Cari judul, tag, atau catatan…">
+<div class="row">
+  <select id="mo"><option value="">Semua bulan</option></select>
+  <button id="rnd" type="button">🎲 Buka jurnal acak</button>
+</div>
+<div class="chips" id="chips"></div>
+
+<div id="otd"></div>
+<div id="list"></div>
+
+<details id="addbox">
+  <summary>＋ Tambah jurnal</summary>
+  <div class="card">
+    <input id="fdate" type="date">
+    <div class="row"><input id="ftitle" placeholder="Judul"><input id="ftags" placeholder="Tag (pisahkan koma)"></div>
+    <input id="flink" type="url" placeholder="Link Google Docs (https://docs.google.com/…)">
+    <div class="row"><textarea id="fnote" rows="2" placeholder="Ringkasan singkat / kata kunci (supaya mudah dicari)"></textarea></div>
+    <button class="p" id="fsave" type="button">Simpan</button>
+    <button id="fcancel" type="button" style="display:none">Batal edit</button>
+  </div>
+</details>
+
+<details>
+  <summary>⇪ Impor banyak sekaligus</summary>
+  <div class="card">
+    <p class="d">Satu baris per jurnal: <b>tanggal | judul | link | tag1, tag2 | catatan</b> (tag & catatan opsional). Contoh tanggal: 2026-10-07.</p>
+    <textarea id="bulk" rows="5" placeholder="2026-10-07 | Hari yang panjang | https://docs.google.com/document/d/... | refleksi, kerja"></textarea>
+    <div class="row"><button class="p" id="bsave" type="button">Impor</button></div>
+  </div>
+</details>
+<div class="row"><button id="exp" type="button">⇩ Ekspor entries.json (untuk disimpan ke GitHub)</button></div>
+<div id="st"></div>
+</main>
+
+<script>
+(function(){
+var entries=[],base=[],local=[],tag='',editing=null;
+var $=function(i){return document.getElementById(i)};
+var LS='jurnal-local-v1';
+var MON=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+function safeUrl(u){return /^https:\/\//i.test(u)?u:'#'}
+function fmt(d){var p=(d||'').split('-');return p.length==3?(+p[2])+' '+MON[+p[1]-1]+' '+p[0]:d||''}
+function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+function lsLoad(){try{return JSON.parse(localStorage.getItem(LS)||'[]')}catch(e){return[]}}
+function lsSave(){try{localStorage.setItem(LS,JSON.stringify(local))}catch(e){}}
+function merge(){
+  var m={};
+  base.forEach(function(e){m[e.id]=Object.assign({},e,{_base:1})});
+  local.forEach(function(e){m[e.id]=Object.assign({},e,{_base:m[e.id]?1:0})});
+  entries=Object.keys(m).map(function(k){return m[k]});
+}
+function put(e){
+  var i=local.findIndex(function(x){return x.id===e.id});
+  if(i>=0)local[i]=e;else local.push(e);
+  lsSave();merge();render();
+}
+function del(id){local=local.filter(function(x){return x.id!==id});lsSave();merge();render()}
+function note(t){$('st').textContent=t}
+function exportJson(){
+  var out=entries.map(function(e){var c=Object.assign({},e);delete c._base;return c})
+    .sort(function(a,b){return (a.date||'').localeCompare(b.date||'')});
+  var txt=JSON.stringify(out,null,2);
+  try{var b=new Blob([txt],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='entries.json';document.body.appendChild(a);a.click();a.remove()}catch(e){}
+  try{navigator.clipboard.writeText(txt)}catch(e){}
+  note('entries.json diunduh & disalin. Ganti isi entries.json di repo GitHub-mu dengan ini.');
+}
+
+function render(){
+  var q=$('q').value.trim().toLowerCase(),mo=$('mo').value;
+  var months={},tags={};
+  entries.forEach(function(e){
+    if(e.date)months[e.date.slice(0,7)]=1;
+    (e.tags||[]).forEach(function(t){tags[t]=(tags[t]||0)+1});
+  });
+  var cur=$('mo').value,keys=Object.keys(months).sort().reverse();
+  $('mo').innerHTML='<option value="">Semua bulan</option>'+keys.map(function(k){var p=k.split('-');return '<option value="'+k+'">'+MON[+p[1]-1]+' '+p[0]+'</option>'}).join('');
+  $('mo').value=keys.indexOf(cur)>=0?cur:'';mo=$('mo').value;
+
+  $('chips').innerHTML=Object.keys(tags).sort().map(function(t){return '<button class="chip'+(t===tag?' on':'')+'" data-t="'+esc(t)+'">#'+esc(t)+' · '+tags[t]+'</button>'}).join('');
+
+  var rows=entries.filter(function(e){
+    if(mo&&(e.date||'').slice(0,7)!==mo)return false;
+    if(tag&&(e.tags||[]).indexOf(tag)<0)return false;
+    if(q){var h=((e.title||'')+' '+(e.note||'')+' '+(e.tags||[]).join(' ')+' '+(e.date||'')+' '+fmt(e.date)).toLowerCase();
+      return q.split(/\s+/).every(function(w){return h.indexOf(w)>=0})}
+    return true;
+  }).sort(function(a,b){return (b.date||'').localeCompare(a.date||'')});
+
+  var now=new Date(),md=('0'+(now.getMonth()+1)).slice(-2)+'-'+('0'+now.getDate()).slice(-2),yr=String(now.getFullYear());
+  var past=entries.filter(function(e){return e.date&&e.date.slice(5)===md&&e.date.slice(0,4)!==yr});
+  $('otd').innerHTML=(!q&&!tag&&!mo&&past.length)?'<div class="card otd"><b>Pada hari ini di tahun-tahun lalu</b>'+past.map(card).join('')+'</div>':'';
+
+  $('list').innerHTML=rows.length?rows.map(card).join(''):'<div class="empty">'+(entries.length?'Tidak ada jurnal yang cocok.':'Belum ada jurnal. Tambahkan link pertamamu di bawah ↓')+'</div>';
+  $('st').textContent=entries.length+' jurnal tersimpan'+(local.length?' · '+local.length+' belum masuk ke repo':'');
+}
+function card(e){
+  return '<div class="card"><h3>'+esc(e.title||'Tanpa judul')+'</h3><div class="d">'+esc(fmt(e.date))+'</div>'+
+  (e.note?'<div class="n">'+esc(e.note)+'</div>':'')+
+  ((e.tags||[]).length?'<div class="tg">'+e.tags.map(function(t){return '#'+esc(t)}).join(' ')+'</div>':'')+
+  '<div class="act"><a href="'+esc(safeUrl(e.link))+'" target="_blank" rel="noopener noreferrer">Buka dokumen</a>'+
+  '<button data-ed="'+esc(e.id)+'">Edit</button>'+(e._base?'':'<button data-del="'+esc(e.id)+'">Hapus</button>')+'</div></div>';
+}
+function parseTags(s){return (s||'').split(',').map(function(t){return t.trim().toLowerCase().replace(/^#/,'')}).filter(Boolean)}
+
+$('fsave').onclick=function(){
+  var link=$('flink').value.trim();
+  if(!/^https:\/\//i.test(link)){note('Link harus diawali https://');return}
+  var e={id:editing||uid(),date:$('fdate').value,title:$('ftitle').value.trim(),link:link,tags:parseTags($('ftags').value),note:$('fnote').value.trim()};
+  put(e);resetForm();
+};
+function resetForm(){editing=null;['fdate','ftitle','ftags','flink','fnote'].forEach(function(i){$(i).value=''});$('fcancel').style.display='none';$('fsave').textContent='Simpan'}
+$('fcancel').onclick=resetForm;
+
+$('bsave').onclick=function(){
+  var n=0;
+  $('bulk').value.split('\n').forEach(function(line){
+    var p=line.split('|').map(function(s){return s.trim()});
+    if(p.length<3||!/^https:\/\//i.test(p[2]))return;
+    put({id:uid(),date:p[0],title:p[1],link:p[2],tags:parseTags(p[3]),note:p[4]||''});n++;
+  });
+  $('bulk').value='';note(n+' jurnal diimpor.');
+};
+
+document.addEventListener('click',function(ev){
+  var t=ev.target.closest('button');if(!t)return;
+  if(t.dataset.t!==undefined&&t.classList.contains('chip')){tag=(tag===t.dataset.t)?'':t.dataset.t;render()}
+  else if(t.dataset.del){if(confirm('Hapus entri ini dari daftar? (Dokumen aslinya tidak terhapus)'))del(t.dataset.del)}
+  else if(t.dataset.ed){
+    var e=entries.find(function(x){return x.id===t.dataset.ed});if(!e)return;
+    editing=e.id;$('fdate').value=e.date||'';$('ftitle').value=e.title||'';$('flink').value=e.link||'';
+    $('ftags').value=(e.tags||[]).join(', ');$('fnote').value=e.note||'';
+    $('fsave').textContent='Perbarui';$('fcancel').style.display='';$('addbox').open=true;$('addbox').scrollIntoView({behavior:'smooth'});
+  }
+});
+$('exp').onclick=exportJson;$('q').oninput=render;$('mo').onchange=render;
+$('rnd').onclick=function(){
+  if(!entries.length)return;
+  var e=entries[Math.floor(Math.random()*entries.length)];
+  window.open(safeUrl(e.link),'_blank','noopener,noreferrer');
+};
+
+local=lsLoad();merge();render();
+fetch('entries.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():[]}).then(function(d){
+  if(Array.isArray(d)){base=d;merge();render()}
+}).catch(function(){});
+})();
+</script>
+</body>
+</html>
