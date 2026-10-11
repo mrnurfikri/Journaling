@@ -1,0 +1,52 @@
+name: Sinkron jurnal
+
+on:
+  schedule:
+    # Setiap Minggu 17:00 UTC = Senin 00:00 WIB
+    - cron: "0 17 * * 0"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Bangun ulang walau isi jurnal tidak berubah (mis. setelah ganti kata sandi)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sinkron-jurnal
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pasang dependensi
+        run: pip install -r requirements.txt
+
+      - name: Ambil, urai, dan enkripsi jurnal
+        env:
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+          JOURNAL_DOCS: ${{ secrets.JOURNAL_DOCS }}
+          JOURNAL_PASSWORD: ${{ secrets.JOURNAL_PASSWORD }}
+          FORCE: ${{ inputs.force }}
+        run: python scripts/build.py
+
+      - name: Simpan jika ada perubahan
+        run: |
+          git config user.name "jurnal-bot"
+          git config user.email "jurnal-bot@users.noreply.github.com"
+          git add index.html .last-hash
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan."
+          else
+            git commit -m "Sinkron jurnal"
+            git push
+          fi
