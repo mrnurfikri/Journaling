@@ -90,8 +90,14 @@ def fetch_markdown(doc_id):
         f'https://www.googleapis.com/drive/v3/files/{doc_id}/export',
         params={'mimeType': 'text/markdown'}, timeout=120)
     if r.status_code != 200:
-        sys.exit(f'Gagal mengambil dokumen (HTTP {r.status_code}). Cek: Drive API aktif, '
-                 f'dokumen dibagikan ke email akun layanan, dan ID dokumen benar.')
+        try:
+            e = r.json().get('error', {})
+            reasons = ', '.join(x.get('reason', '') for x in e.get('errors', []))
+            detail = f"{e.get('status', '')} | {reasons} | {str(e.get('message', ''))[:300]}"
+        except Exception:
+            detail = r.text[:200]
+        sys.exit(f'Gagal mengambil dokumen (HTTP {r.status_code}). Alasan dari Google: {detail}\n'
+                 f'Cek: Drive API aktif, dokumen dibagikan ke email akun layanan, dan ID dokumen benar.')
     r.encoding = 'utf-8'
     return r.text
 
